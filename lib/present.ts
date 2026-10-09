@@ -138,8 +138,8 @@ export function recipient(a: ActionDraft): { name: string; isSupplier: boolean; 
   return { name: where, isSupplier: false, lang: isLang(l) ? l : "en" };
 }
 
-/** The message a person would actually send, written in the recipient's language. */
-export function actionMessage(lang: Lang, a: ActionDraft, data: Dataset): string {
+/** The message a person would actually send, written in the recipient's language and signed by the sender. */
+export function actionMessage(lang: Lang, a: ActionDraft, data: Dataset, signer?: string): string {
   const part = partName(data, a.sku);
   const locale = localeOf(lang);
   const r = recipient(a);
@@ -158,7 +158,7 @@ export function actionMessage(lang: Lang, a: ActionDraft, data: Dataset): string
     const key: Key = a.purpose === "markdown" ? "m.markdown" : a.purpose === "confirm_spike" ? "m.confirm_spike" : "m.confirm_drop";
     body = t(lang, key, { qty: a.qty ?? 0, part, sku: a.sku, pct: a.pct ?? 0, from: a.from ?? 0, to: a.to ?? 0 });
   }
-  return `${t(lang, "m.greet", { who })} ${body}\n${t(lang, "m.sign")}`;
+  return `${t(lang, "m.greet", { who })} ${body}\n${t(lang, "m.sign", { name: signer || t(lang, "app.name") })}`;
 }
 
 export function actionDone(lang: Lang, a: ActionDraft): string {

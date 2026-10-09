@@ -5,6 +5,7 @@ import { ta } from "./ta";
 import { te } from "./te";
 
 export type { Key } from "./en";
+export { en };
 export type Lang = "en" | "hi" | "kn" | "ta" | "te";
 
 export const LANGS: { code: Lang; name: string; english: string; locale: string }[] = [

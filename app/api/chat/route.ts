@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { currentUser } from "@/lib/auth/server";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,7 @@ async function askGemini(key: string, system: string, user: string, signal: Abor
 }
 
 export async function POST(req: Request) {
+  if (!(await currentUser())) return NextResponse.json({ answer: null, reason: "unauthenticated" }, { status: 401 });
   let body: Body;
   try {
     body = (await req.json()) as Body;

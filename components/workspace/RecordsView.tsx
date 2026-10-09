@@ -1,6 +1,9 @@
 "use client";
 
+import { ArrowRight, CalendarX2, Download, Eye, PackageMinus, RotateCcw, Search, TrendingUp, Upload, Wallet } from "lucide-react";
+import { motion } from "motion/react";
 import { useMemo, useRef, useState } from "react";
+import { canEditRecords, type SessionUser } from "@/lib/auth/roles";
 import { readTable, type TableName, TABLES, toCsv } from "@/lib/csv";
 import { buildIndex } from "@/lib/engine";
 import { type Key, type Lang, num, place, t } from "@/lib/i18n";
@@ -9,6 +12,7 @@ import { emptyLocation, ordersOverdue, priceHike, rush, setRecentRate } from "@/
 
 type Props = {
   lang: Lang;
+  user: SessionUser;
   data: Dataset;
   settings: Settings;
   asOf: string;
@@ -37,7 +41,7 @@ const ASSUME: [keyof Settings, Key, number][] = [
 ];
 
 /** A number field that only commits a valid, non-negative value. */
-function NumCell({ value, label, step = 1, onCommit }: { value: number; label: string; step?: number; onCommit: (n: number) => void }) {
+function NumCell({ value, label, step = 1, disabled, onCommit }: { value: number; label: string; step?: number; disabled?: boolean; onCommit: (n: number) => void }) {
   const [draft, setDraft] = useState<string | null>(null);
   return (
     <input
@@ -47,6 +51,7 @@ function NumCell({ value, label, step = 1, onCommit }: { value: number; label: s
       min={0}
       step={step}
       aria-label={label}
+      disabled={disabled}
       value={draft ?? String(value)}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
@@ -61,8 +66,9 @@ function NumCell({ value, label, step = 1, onCommit }: { value: number; label: s
   );
 }
 
-export default function DataView({ lang, data, settings, asOf, onData, onSettings, onReset }: Props) {
+export default function RecordsView({ lang, user, data, settings, asOf, onData, onSettings, onReset }: Props) {
   const T = (k: Key, v?: Record<string, string | number>) => t(lang, k, v);
+  const edit = canEditRecords(user);
   const [tab, setTab] = useState<Tab>("inventory");
   const [filter, setFilter] = useState("");
   const [error, setError] = useState("");
@@ -82,7 +88,7 @@ export default function DataView({ lang, data, settings, asOf, onData, onSetting
   }, [data, settings, asOf]);
 
   const upload = async (f: File | undefined) => {
-    if (!f || tab === "assumptions") return;
+    if (!f || tab === "assumptions" || !edit) return;
     setError("");
     const name = FILE[tab];
     try {
@@ -141,11 +147,13 @@ export default function DataView({ lang, data, settings, asOf, onData, onSetting
         <tbody>
           {rows.slice(0, LIMIT).map(({ r, i }) => (
             <tr key={`${r.sku}-${r.location}`}>
-              <td data-label={T("col.sku")}>{r.sku}</td>
+              <td data-label={T("col.sku")} className="code">
+                {r.sku}
+              </td>
               <td data-label={T("col.name")}>{part(r.sku)}</td>
               <td data-label={T("col.location")}>{place(lang, r.location)}</td>
               <td data-label={T("col.stock")} className="num">
-                <NumCell value={r.stock} label={`${T("col.stock")}, ${part(r.sku)}, ${r.location}`} onCommit={(n) => patch("inventory", i, { stock: Math.round(n) })} />
+                <NumCell value={r.stock} disabled={!edit} label={`${T("col.stock")}, ${part(r.sku)}, ${r.location}`} onCommit={(n) => patch("inventory", i, { stock: Math.round(n) })} />
               </td>
             </tr>
           ))}
@@ -158,20 +166,22 @@ export default function DataView({ lang, data, settings, asOf, onData, onSetting
     shown = Math.min(total, LIMIT);
     body = (
       <>
-        <p className="note">{T("data.sales.note")}</p>
+        <p className="note-line">{T("data.sales.note")}</p>
         <table className="table">
           {head([["col.sku"], ["col.name"], ["col.location"], ["col.avgPrev", true], ["col.avg7", true]])}
           <tbody>
             {rows.slice(0, LIMIT).map((r) => (
               <tr key={`${r.sku}-${r.location}`}>
-                <td data-label={T("col.sku")}>{r.sku}</td>
+                <td data-label={T("col.sku")} className="code">
+                  {r.sku}
+                </td>
                 <td data-label={T("col.name")}>{part(r.sku)}</td>
                 <td data-label={T("col.location")}>{place(lang, r.location)}</td>
                 <td data-label={T("col.avgPrev")} className="num">
                   {num(r.rPrev)}
                 </td>
                 <td data-label={T("col.avg7")} className="num">
-                  <NumCell value={r.r7} step={0.5} label={`${T("col.avg7")}, ${part(r.sku)}, ${r.location}`} onCommit={(n) => onData(setRecentRate(data, asOf, r.sku, r.location, n))} />
+                  <NumCell value={r.r7} step={0.5} disabled={!edit} label={`${T("col.avg7")}, ${part(r.sku)}, ${r.location}`} onCommit={(n) => onData(setRecentRate(data, asOf, r.sku, r.location, n))} />
                 </td>
               </tr>
             ))}
@@ -190,16 +200,18 @@ export default function DataView({ lang, data, settings, asOf, onData, onSetting
           {rows.slice(0, LIMIT).map(({ r, i }) => (
             <tr key={`${r.supplier}-${r.sku}`}>
               <td data-label={T("col.supplier")}>{r.supplier}</td>
-              <td data-label={T("col.sku")}>{r.sku}</td>
+              <td data-label={T("col.sku")} className="code">
+                {r.sku}
+              </td>
               <td data-label={T("col.name")}>{part(r.sku)}</td>
               <td data-label={T("col.price")} className="num">
-                <NumCell value={r.price} label={`${T("col.price")}, ${r.supplier}, ${r.sku}`} onCommit={(n) => patch("suppliers", i, { price: n })} />
+                <NumCell value={r.price} disabled={!edit} label={`${T("col.price")}, ${r.supplier}, ${r.sku}`} onCommit={(n) => patch("suppliers", i, { price: n })} />
               </td>
               <td data-label={T("col.lead")} className="num">
-                <NumCell value={r.lead_time_days} label={`${T("col.lead")}, ${r.supplier}, ${r.sku}`} onCommit={(n) => patch("suppliers", i, { lead_time_days: Math.round(n) })} />
+                <NumCell value={r.lead_time_days} disabled={!edit} label={`${T("col.lead")}, ${r.supplier}, ${r.sku}`} onCommit={(n) => patch("suppliers", i, { lead_time_days: Math.round(n) })} />
               </td>
               <td data-label={T("col.moq")} className="num">
-                <NumCell value={r.moq} label={`${T("col.moq")}, ${r.supplier}, ${r.sku}`} onCommit={(n) => patch("suppliers", i, { moq: Math.max(1, Math.round(n)) })} />
+                <NumCell value={r.moq} disabled={!edit} label={`${T("col.moq")}, ${r.supplier}, ${r.sku}`} onCommit={(n) => patch("suppliers", i, { moq: Math.max(1, Math.round(n)) })} />
               </td>
             </tr>
           ))}
@@ -216,18 +228,27 @@ export default function DataView({ lang, data, settings, asOf, onData, onSetting
         <tbody>
           {rows.slice(0, LIMIT).map(({ r, i }) => (
             <tr key={r.po}>
-              <td data-label={T("col.po")}>{r.po}</td>
+              <td data-label={T("col.po")} className="code">
+                {r.po}
+              </td>
               <td data-label={T("col.supplier")}>{r.supplier}</td>
               <td data-label={T("col.name")}>{part(r.sku)}</td>
               <td data-label={T("col.location")}>{place(lang, r.location || "Hubli Warehouse")}</td>
               <td data-label={T("col.qty")} className="num">
-                <NumCell value={r.qty} label={`${T("col.qty")}, ${r.po}`} onCommit={(n) => patch("purchase_orders", i, { qty: Math.round(n) })} />
+                <NumCell value={r.qty} disabled={!edit} label={`${T("col.qty")}, ${r.po}`} onCommit={(n) => patch("purchase_orders", i, { qty: Math.round(n) })} />
               </td>
               <td data-label={T("col.expected")}>
-                <input className="cell-input" type="date" aria-label={`${T("col.expected")}, ${r.po}`} value={r.expected_date} onChange={(e) => e.target.value && patch("purchase_orders", i, { expected_date: e.target.value })} />
+                <input
+                  className="cell-input"
+                  type="date"
+                  disabled={!edit}
+                  aria-label={`${T("col.expected")}, ${r.po}`}
+                  value={r.expected_date}
+                  onChange={(e) => e.target.value && patch("purchase_orders", i, { expected_date: e.target.value })}
+                />
               </td>
               <td data-label={T("col.status")}>
-                <select className="cell-input" aria-label={`${T("col.status")}, ${r.po}`} value={r.status.toLowerCase()} onChange={(e) => patch("purchase_orders", i, { status: e.target.value })}>
+                <select className="cell-input" disabled={!edit} aria-label={`${T("col.status")}, ${r.po}`} value={r.status.toLowerCase()} onChange={(e) => patch("purchase_orders", i, { status: e.target.value })}>
                   <option value="open">{T("status.open")}</option>
                   <option value="received">{T("status.received")}</option>
                   <option value="cancelled">{T("status.cancelled")}</option>
@@ -248,7 +269,9 @@ export default function DataView({ lang, data, settings, asOf, onData, onSetting
         <tbody>
           {rows.slice(0, LIMIT).map((r) => (
             <tr key={r.sku}>
-              <td data-label={T("col.sku")}>{r.sku}</td>
+              <td data-label={T("col.sku")} className="code">
+                {r.sku}
+              </td>
               <td data-label={T("col.name")}>{r.name}</td>
               <td data-label={T("col.machine")}>{r.machine_model}</td>
               <td data-label={T("col.category")}>{r.category}</td>
@@ -259,82 +282,135 @@ export default function DataView({ lang, data, settings, asOf, onData, onSetting
     );
   }
 
+  const scenarios: { key: Key; icon: typeof CalendarX2; tone: string; run: () => Dataset }[] = [
+    { key: "surprise.late", icon: CalendarX2, tone: "k-overdue_po", run: () => ordersOverdue(data, asOf) },
+    { key: "surprise.rush", icon: TrendingUp, tone: "k-demand_spike", run: () => rush(data, asOf, "Dharwad") },
+    { key: "surprise.price", icon: Wallet, tone: "k-supplier_fit", run: () => priceHike(data, "Hubli Trade Link") },
+    { key: "surprise.count", icon: PackageMinus, tone: "k-stockout", run: () => emptyLocation(data, "Hubli Warehouse") },
+  ];
+
   return (
     <>
       <div className="page-head">
-        <h1>{T("data.title")}</h1>
-        <p>{T("data.sub")}</p>
+        <div>
+          <h1 className="page-title">{T("data.title")}</h1>
+          <p className="page-sub">{T("data.sub")}</p>
+        </div>
       </div>
 
-      <section className="panel" aria-labelledby="surprise">
-        <h2 className="block-title" id="surprise">
-          {T("surprise.title")}
-        </h2>
-        <div className="chips">
-          <button className="btn" onClick={() => onData(ordersOverdue(data, asOf))}>
-            {T("surprise.late")}
-          </button>
-          <button className="btn" onClick={() => onData(rush(data, asOf, "Dharwad"))}>
-            {T("surprise.rush")}
-          </button>
-          <button className="btn" onClick={() => onData(priceHike(data, "Hubli Trade Link"))}>
-            {T("surprise.price")}
-          </button>
-          <button className="btn" onClick={() => onData(emptyLocation(data, "Hubli Warehouse"))}>
-            {T("surprise.count")}
-          </button>
-          <button className="btn danger" onClick={onReset}>
-            {T("data.reset")}
+      {!edit && (
+        <p className="notice">
+          <Eye size={18} aria-hidden="true" />
+          {T("data.readonly")}
+        </p>
+      )}
+
+      <section aria-labelledby="surprise-title">
+        <div className="section-head">
+          <h2 className="section-title" id="surprise-title">
+            {T("surprise.title")}
+          </h2>
+        </div>
+        <div className="scenarios">
+          {scenarios.map((s, i) => {
+            const Icon = s.icon;
+            return (
+              <motion.button
+                key={s.key}
+                className={`scenario ${s.tone}`}
+                disabled={!edit}
+                onClick={() => onData(s.run())}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05, duration: 0.4 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <span className="scenario-ico" aria-hidden="true">
+                  <Icon size={18} />
+                </span>
+                <b>{T(s.key)}</b>
+                <span aria-hidden="true">
+                  <ArrowRight size={14} />
+                </span>
+              </motion.button>
+            );
+          })}
+          <button className="scenario reset" onClick={onReset} disabled={!edit}>
+            <RotateCcw size={18} aria-hidden="true" style={{ color: "var(--muted)" }} />
+            <b>{T("data.reset")}</b>
           </button>
         </div>
       </section>
 
-      <section className="panel">
-        <div className="subtabs" role="tablist">
+      <section className="card">
+        <div className="tabs" role="tablist" aria-label={T("data.title")}>
           {TABS.map((x) => (
-            <button key={x} role="tab" className="subtab" aria-selected={tab === x} onClick={() => { setTab(x); setError(""); }}>
+            <button
+              key={x}
+              role="tab"
+              id={`tab-${x}`}
+              aria-selected={tab === x}
+              aria-controls="records-panel"
+              className="tab"
+              onClick={() => {
+                setTab(x);
+                setError("");
+              }}
+            >
               {T(`data.tab.${x}` as Key)}
+              {tab === x && <motion.span layoutId="tab-line" className="tab-line" transition={{ type: "spring", stiffness: 500, damping: 40 }} />}
             </button>
           ))}
         </div>
 
-        {tab === "assumptions" ? (
-          <>
-            <p className="note">{T("assume.note")}</p>
-            <div className="form">
-              {ASSUME.map(([field, label, step]) => (
-                <label key={field}>
-                  {T(label)}
-                  <NumCell value={settings[field]} step={step} label={T(label)} onCommit={(n) => onSettings({ ...settings, [field]: n })} />
-                </label>
-              ))}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="toolbar">
-              <label className="sr-only" htmlFor="filter">
-                {T("data.search")}
-              </label>
-              <input id="filter" className="input" type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={T("data.search")} />
-              <input ref={file} type="file" accept=".csv,text/csv" hidden onChange={(e) => upload(e.target.files?.[0])} />
-              <button className="btn" onClick={() => file.current?.click()}>
-                {T("data.upload")}
-              </button>
-              <button className="btn" onClick={download}>
-                {T("data.download")}
-              </button>
-              <span className="count">{T("data.rows", { n: num(total) })}</span>
-            </div>
-            {error && (
-              <p className="error" role="alert">
-                {error}
+        <div id="records-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
+          {tab === "assumptions" ? (
+            <>
+              <p className="note-line" style={{ paddingTop: 16 }}>
+                {T("assume.note")}
               </p>
-            )}
-            {total === 0 ? <p className="empty">{T("data.norows")}</p> : body}
-            {total > shown && <p className="count" style={{ marginTop: 12 }}>{T("data.more", { n: shown })}</p>}
-          </>
-        )}
+              <div className="form-grid">
+                {ASSUME.map(([field, label, step]) => (
+                  <label key={field}>
+                    {T(label)}
+                    <NumCell value={settings[field]} step={step} disabled={!edit} label={T(label)} onCommit={(n) => onSettings({ ...settings, [field]: n })} />
+                  </label>
+                ))}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="rec-tools">
+                <div className="input-wrap">
+                  <Search size={16} aria-hidden="true" />
+                  <label className="sr-only" htmlFor="filter">
+                    {T("data.search")}
+                  </label>
+                  <input id="filter" className="input" type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={T("data.search")} />
+                </div>
+                <input ref={file} type="file" accept=".csv,text/csv" hidden onChange={(e) => upload(e.target.files?.[0])} />
+                {edit && (
+                  <button className="btn" onClick={() => file.current?.click()}>
+                    <Upload size={16} aria-hidden="true" />
+                    {T("data.upload")}
+                  </button>
+                )}
+                <button className="btn" onClick={download}>
+                  <Download size={16} aria-hidden="true" />
+                  {T("data.download")}
+                </button>
+                <span className="muted">{T("data.rows", { n: num(total) })}</span>
+              </div>
+              {error && (
+                <p className="error" role="alert">
+                  {error}
+                </p>
+              )}
+              <div className="table-wrap">{total === 0 ? <p className="muted" style={{ padding: "12px 0" }}>{T("data.norows")}</p> : body}</div>
+              {total > shown && <p className="note-line">{T("data.more", { n: shown })}</p>}
+            </>
+          )}
+        </div>
       </section>
     </>
   );

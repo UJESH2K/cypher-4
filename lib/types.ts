@@ -169,11 +169,15 @@ export type Analysis = {
 export type LogEntry = {
   id: string;
   at: string;
-  decision: "approved" | "rejected";
+  decision: "approved" | "rejected" | "requested";
   issueId: string;
   kind: IssueKind;
   sku: string;
   location: string;
   option: Option;
   reason?: string;
+  by?: string; // name of the person who decided
 };
+
+// A store manager asking the Head of Purchasing to approve an option they may not approve themselves.
+export type ApprovalRequest = { issueId: string; optionId: string; by: string; byName: string; at: string };
