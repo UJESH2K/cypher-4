@@ -1,0 +1,29 @@
+{
+  "name": "kaveri-desk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Kaveri Desk: an AI purchasing colleague for Kaveri Spares & Hydraulics (Cypher 2026, Challenge 01)",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/anek-devanagari": "^5.3.0",
+    "@fontsource-variable/anek-kannada": "^5.3.0",
+    "@fontsource-variable/anek-latin": "^5.3.0",
+    "@fontsource-variable/anek-tamil": "^5.3.0",
+    "@fontsource-variable/anek-telugu": "^5.3.0",
+    "next": "^16.4.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.0"
+  }
+}
