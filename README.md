@@ -59,16 +59,37 @@ A sidebar holds Today, Problems, Decisions, Records and Ask the desk, with the l
 ```bash
 npm install
 npm run dev      # http://localhost:3000
-npm test         # 18 tests: the brief's Gokak example, edge cases, translations, sessions and roles
+npm test         # 24 tests: the brief's Gokak example, edge cases, translations, sessions, roles and the real dataset
 ```
+
+With a database (recommended):
+
+1. Create a Supabase project. In its SQL Editor run `supabase/migrations/0001_kaveri_desk.sql`, then `0002_reset_where_true.sql`.
+2. Copy `.env.example` to `.env.local` and fill in `SUPABASE_URL`, `SUPABASE_SECRET_KEY` and `AUTH_SECRET`.
+3. `npm run db:seed` loads the books (about 30 seconds).
+4. `npm run dev`. The sidebar says "Live from the database".
+
+Without the Supabase variables the desk still runs, from a built-in sample in each browser.
 
 Docker: `docker build -t kaveri-desk . && docker run -p 3000:3000 -e AUTH_SECRET=change-me-to-something-long kaveri-desk`
 
 ## Deploy
 
-Import this repository at [vercel.com/new](https://vercel.com/new), add `AUTH_SECRET` (any random string of 16+ characters) under Environment Variables, and press Deploy. Every push to `main` then redeploys automatically. `/api/health` is the health check; it reports `"auth": "demo-secret"` until `AUTH_SECRET` is set.
+Import this repository at [vercel.com/new](https://vercel.com/new). Under Environment Variables add `SUPABASE_URL`, `SUPABASE_SECRET_KEY` and `AUTH_SECRET` (any random string of 16+ characters), then press Deploy. Every push to `main` then redeploys automatically; after changing a variable, redeploy. `/api/health` is the health check: it reports `"database": "ok"` and `"auth": "env-secret"` when everything is set.
 
 To let a language model reword chat answers, also add `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` (see `.env.example`). Without a key the chat answers from the same calculations.
+
+## Data: what is real
+
+- **Real:** the demand pattern of 320 of the 334 parts. Each follows a real monthly sales series from the car-parts dataset of Hyndman's *expsmooth* package, as published in the Monash Time Series Forecasting Archive ([doi.org/10.5281/zenodo.4656021](https://doi.org/10.5281/zenodo.4656021), CC BY 4.0). The raw file and its credit are in `data/carparts/`.
+- **Generated, from stated rules** (`lib/data/generate.ts`): the split across stores and days, stock levels, supplier prices, lead times, minimum orders and two years of purchase orders. No distributor publishes these.
+- **Hand-built:** the 14 headline parts in `lib/sample.ts`, so the challenge's own example (Gokak's filter) is in the data.
+
+Every one of the 2,674 real series classifies as intermittent or lumpy (Syntetos-Boylan ADI/CV² cut-offs, `lib/data/carparts.ts`). So for those parts the agent judges slow stock on six months of sales instead of four weeks, which removed 104 false dead-stock alarms. **Records → Data and sources** shows all of this live.
+
+## Backend
+
+Supabase (PostgreSQL), 17 tables plus 4 snapshot tables, with row-level security on and no public policies: only the server, holding the secret key, can read or write. API routes: `/api/state` (the books, in one `api_snapshot` call), `/api/decide` (approve, reject or request: the server re-runs the agent and checks the role, so a forged approval gets 403), `/api/records`, `/api/reset`, `/api/agent/run` (logged in `agent_runs`), `/api/insights` and `/api/health`. Accounts live in `app_users` with PBKDF2 hashes. Open screens refresh every 20 seconds, so a store manager's request reaches the Head of Purchasing on another device. Each new day (India time) the books roll forward so "today" is always today.
 
 ## Architecture
 
@@ -104,6 +125,6 @@ The five files do not contain margins, transport costs or carrying costs, so the
 
 Sample data is fictional and rebuilt relative to today's date. Purchase orders carry an optional `location` column; without it an order is assumed to go to Hubli Warehouse.
 
-Decisions, approval requests and edits are kept in the browser, so the hand-off between accounts works on one device, which is what a demo needs. A shared database would carry them across devices.
+With the database, decisions, approval requests and edits are shared by every user and device. Without it, they are kept in each browser.
 
 The Hindi, Kannada, Tamil and Telugu text should be read once by a native speaker before a real rollout.
