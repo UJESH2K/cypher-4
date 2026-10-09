@@ -21,7 +21,7 @@ import RecordsView from "./RecordsView";
 import Sidebar from "./Sidebar";
 import TodayView from "./TodayView";
 import Toasts from "./Toasts";
-import { type Handled, type Route, type Theme, type Toast, type View, VIEWS } from "./types";
+import { type AgentRunInfo, type Handled, type Mode, type Route, type Theme, type Toast, type View, VIEWS } from "./types";
 
 const STORE = "kaveri-desk-v2";
 const SIDEBAR = "kd-sidebar";
@@ -60,6 +60,28 @@ function useMedia(query: string) {
 
 type Props = { user: SessionUser; initialLang: Lang };
 
+// What /api/state returns: the books and today's decisions, straight from the database.
+type Synced = {
+  asOf: string;
+  data: Dataset;
+  settings: Settings;
+  handled: Record<string, Handled>;
+  rejected: Record<string, string[]>;
+  requests: Record<string, ApprovalRequest>;
+  log: LogEntry[];
+};
+
+async function fetchState(): Promise<Synced | null | "signed-out"> {
+  try {
+    const res = await fetch("/api/state", { cache: "no-store" });
+    if (res.status === 401) return "signed-out";
+    if (!res.ok) return null;
+    return (await res.json()) as Synced;
+  } catch {
+    return null;
+  }
+}
+
 export default function Workspace({ user, initialLang }: Props) {
   const [today, setToday] = useState("");
   const [lang, setLang] = useState<Lang>(initialLang);
@@ -81,18 +103,66 @@ export default function Workspace({ user, initialLang }: Props) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [run, setRun] = useState(0);
   const [checkedAt, setCheckedAt] = useState<Date | null>(null);
+  const [mode, setMode] = useState<Mode>("loading");
+  const [lastRun, setLastRun] = useState<AgentRunInfo | null>(null);
+  const busy = useRef(false);
   const wide = useMedia("(min-width: 1061px)");
   const T = useCallback((k: Key, v?: Record<string, string | number>) => t(lang, k, v), [lang]);
 
-  // Load. A saved session from an earlier day is dropped so dates never go stale.
+  const apply = useCallback((s: Synced) => {
+    setToday(s.asOf);
+    setData(s.data);
+    setSettings({ ...DEFAULT_SETTINGS, ...s.settings });
+    setHandled(s.handled ?? {});
+    setRejected(s.rejected ?? {});
+    setRequests(s.requests ?? {});
+    setLog(s.log ?? []);
+  }, []);
+
+  const runServerAgent = useCallback(async () => {
+    try {
+      const res = await fetch("/api/agent/run", { method: "POST" });
+      if (res.ok) setLastRun((await res.json()) as AgentRunInfo);
+    } catch {
+      // The numbers on screen are still right; only the run log is missed.
+    }
+  }, []);
+
+  // Load. The database is the source of truth; without one, the desk works from
+  // the built-in sample in this browser, and a saved copy from an earlier day is dropped.
   useEffect(() => {
-    const day = toIso(new Date());
-    setToday(day);
     setRoute(readHash());
     setTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
     setCheckedAt(new Date());
     try {
       setMini(window.localStorage.getItem(SIDEBAR) === "mini");
+    } catch {
+      // Not remembered; fine.
+    }
+    let cancelled = false;
+    (async () => {
+      const synced = await fetchState();
+      if (cancelled) return;
+      if (synced === "signed-out") return window.location.assign("/login");
+      if (synced) {
+        apply(synced);
+        setMode("server");
+        runServerAgent();
+        return;
+      }
+      setMode("local");
+      loadLocal();
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Runs once on open; apply and runServerAgent never change.
+  }, []);
+
+  const loadLocal = () => {
+    const day = toIso(new Date());
+    setToday(day);
+    try {
       const raw = window.localStorage.getItem(STORE);
       const saved = raw ? JSON.parse(raw) : null;
       if (saved && saved.day === day && saved.data?.inventory) {
@@ -108,16 +178,16 @@ export default function Workspace({ user, initialLang }: Props) {
       // Storage blocked or corrupt: start from the sample.
     }
     setData(buildSample(day));
-  }, []);
+  };
 
   useEffect(() => {
-    if (!data || !today) return;
+    if (mode !== "local" || !data || !today) return;
     try {
       window.localStorage.setItem(STORE, JSON.stringify({ day: today, data, settings, rejected, handled, log, requests }));
     } catch {
       // Quota or private mode: the desk still works, it just will not remember.
     }
-  }, [today, data, settings, rejected, handled, log, requests]);
+  }, [mode, today, data, settings, rejected, handled, log, requests]);
 
   useEffect(() => {
     const onPop = () => setRoute(readHash());
@@ -167,6 +237,46 @@ export default function Workspace({ user, initialLang }: Props) {
       window.removeEventListener("focus", check);
     };
   }, [lang, toast]);
+
+  useEffect(() => {
+    if (mode !== "server") return;
+    const refresh = async () => {
+      if (busy.current || document.visibilityState !== "visible") return;
+      const s = await fetchState();
+      if (s && s !== "signed-out" && !busy.current) apply(s);
+    };
+    const id = window.setInterval(refresh, 20_000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(id);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [mode, apply]);
+
+  /** POST to the backend; returns the fresh state, or null after telling the user what went wrong. */
+  const call = useCallback(
+    async (path: string, body?: unknown): Promise<Synced | null> => {
+      busy.current = true;
+      try {
+        const res = await fetch(path, {
+          method: "POST",
+          headers: body === undefined ? undefined : { "content-type": "application/json" },
+          body: body === undefined ? undefined : JSON.stringify(body),
+        });
+        if (res.ok) return (await res.json()) as Synced;
+        toast("error", t(lang, res.status === 409 ? "sync.changed" : res.status === 403 ? "sync.denied" : "sync.failed"));
+        const s = await fetchState();
+        if (s && s !== "signed-out") apply(s);
+        return null;
+      } catch {
+        toast("error", t(lang, "sync.failed"));
+        return null;
+      } finally {
+        busy.current = false;
+      }
+    },
+    [apply, lang, toast],
+  );
 
   const analysis = useMemo(() => (data && today ? analyse(data, settings, today, rejected) : null), [data, settings, today, rejected]);
   const open = useMemo(() => (analysis ? analysis.issues.filter((i) => !handled[i.id]) : []), [analysis, handled]);
@@ -232,7 +342,11 @@ export default function Workspace({ user, initialLang }: Props) {
   const recheck = useCallback(() => {
     setRun((r) => r + 1);
     setCheckedAt(new Date());
-  }, []);
+    if (mode === "server") {
+      runServerAgent();
+      fetchState().then((s) => s && s !== "signed-out" && apply(s));
+    }
+  }, [mode, runServerAgent, apply]);
 
   const signOut = useCallback(async () => {
     try {
@@ -247,8 +361,16 @@ export default function Workspace({ user, initialLang }: Props) {
     return { id: `${at}-${issue.id}-${decision}`, at, decision, issueId: issue.id, kind: issue.kind, sku: issue.sku, location: issue.location, option, reason, by: user.name };
   };
 
-  const approve = (issue: Issue, option: Option) => {
+  const approve = async (issue: Issue, option: Option) => {
     if (!data) return;
+    if (mode === "server") {
+      const s = await call("/api/decide", { issueId: issue.id, optionId: option.id, action: "approve" });
+      if (s) {
+        apply(s);
+        toast("success", [T("done.approved") + ".", ...option.actions.map((a) => actionDone(lang, a))].join(" "));
+      }
+      return;
+    }
     const at = new Date().toISOString();
     setData(applyOption(data, option));
     setHandled((h) => ({ ...h, [issue.id]: { issue, option, at, by: user.name } }));
@@ -260,7 +382,15 @@ export default function Workspace({ user, initialLang }: Props) {
     toast("success", [T("done.approved") + ".", ...option.actions.map((a) => actionDone(lang, a))].join(" "));
   };
 
-  const reject = (issue: Issue, option: Option, reason: Key) => {
+  const reject = async (issue: Issue, option: Option, reason: Key) => {
+    if (mode === "server") {
+      const s = await call("/api/decide", { issueId: issue.id, optionId: option.id, action: "reject", reason });
+      if (s) {
+        apply(s);
+        toast("info", T("done.replan"));
+      }
+      return;
+    }
     setRejected((r) => ({ ...r, [issue.id]: [...(r[issue.id] ?? []), option.id] }));
     setLog((l) => [entry(issue, option, "rejected", reason), ...l]);
     setRequests((r) => {
@@ -270,20 +400,50 @@ export default function Workspace({ user, initialLang }: Props) {
     toast("info", T("done.replan"));
   };
 
-  const request = (issue: Issue, option: Option) => {
+  const request = async (issue: Issue, option: Option) => {
+    if (mode === "server") {
+      const s = await call("/api/decide", { issueId: issue.id, optionId: option.id, action: "request" });
+      if (s) {
+        apply(s);
+        toast("info", T("detail.requested"));
+      }
+      return;
+    }
     const at = new Date().toISOString();
     setRequests((r) => ({ ...r, [issue.id]: { issueId: issue.id, optionId: option.id, by: user.id, byName: user.name, at } }));
     setLog((l) => [entry(issue, option, "requested"), ...l]);
     toast("info", T("detail.requested"));
   };
 
-  const changeData = (next: Dataset) => {
-    setData(next);
+  const changeData = async (next: Dataset) => {
+    setData(next); // show the change at once; the server's copy replaces it a moment later
     setCheckedAt(new Date());
+    if (mode === "server") {
+      const s = await call("/api/records", { data: next });
+      if (!s) return;
+      apply(s);
+    }
     toast("info", T("data.changed"));
   };
 
-  const reset = () => {
+  const changeSettings = async (next: Settings) => {
+    setSettings(next);
+    if (mode === "server") {
+      const s = await call("/api/records", { settings: next });
+      if (s) apply(s);
+    }
+  };
+
+  const reset = async () => {
+    if (mode === "server") {
+      const s = await call("/api/reset");
+      if (!s) return;
+      apply(s);
+      setCheckedAt(new Date());
+      go("today");
+      toast("info", T("data.changed"));
+      return;
+    }
     if (!today) return;
     setData(buildSample(today));
     setSettings(DEFAULT_SETTINGS);
@@ -319,6 +479,8 @@ export default function Workspace({ user, initialLang }: Props) {
           mini={mini}
           theme={theme}
           checkedAt={checkedAt}
+          mode={mode}
+          lastRun={lastRun}
           onNavigate={(v) => go(v)}
           onAsk={() => {
             setNavOpen(false);
@@ -359,7 +521,7 @@ export default function Workspace({ user, initialLang }: Props) {
           </header>
 
           <main id="main">
-            {!data || !analysis ? (
+            {!data || !analysis || mode === "loading" ? (
               <div className="page" role="status" aria-label={T("loading")}>
                 <div className="skeleton">
                   <div className="sk" style={{ height: 120, maxWidth: 560 }} />
@@ -435,7 +597,8 @@ export default function Workspace({ user, initialLang }: Props) {
                       settings={settings}
                       asOf={analysis.asOf}
                       onData={changeData}
-                      onSettings={setSettings}
+                      onSettings={changeSettings}
+                      server={mode === "server"}
                       onReset={reset}
                     />
                   )}

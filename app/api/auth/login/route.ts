@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { isHttps } from "@/lib/auth/server";
+import { authenticate, isHttps } from "@/lib/auth/server";
 import { SESSION_COOKIE, SESSION_HOURS, signSession } from "@/lib/auth/session";
-import { checkPassword } from "@/lib/auth/users";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +42,7 @@ export async function POST(req: Request) {
   const password = typeof body.password === "string" ? body.password.slice(0, 128) : "";
   if (!id || !password) return NextResponse.json({ ok: false, error: "invalid" }, { status: 401 });
 
-  const user = await checkPassword(id, password);
+  const user = await authenticate(id, password);
   if (!user) {
     recordFail(ip, now);
     console.info(`[auth] failed sign-in for "${id.replace(/[^\w@.-]/g, "")}"`);

@@ -168,7 +168,7 @@ export default function TodayView(p: Props) {
           <Hand size={20} aria-hidden="true" />
           <p>{p.requests.length === 1 ? T("brief.requests.one") : T("brief.requests.n", { n: p.requests.length })}</p>
           <button className="btn sm brass" onClick={() => p.onOpen(p.requests[0].issueId)}>
-            {T("brief.review")}
+            {T("brief.reviewRequest")}
             <ArrowRight size={15} aria-hidden="true" />
           </button>
         </motion.div>

@@ -37,18 +37,18 @@ const ACCOUNTS: Account[] = [
 ];
 
 // Used for unknown IDs, so a wrong ID takes as long to reject as a wrong password.
-const DUMMY = { salt: "7acc954561c60ed6185135e6326f29df", hash: "d574d1c1b07a22cfcdfa5ac907bcb52466a14865f2255b83e642fd948186732d" };
+export const DUMMY = { salt: "7acc954561c60ed6185135e6326f29df", hash: "d574d1c1b07a22cfcdfa5ac907bcb52466a14865f2255b83e642fd948186732d" };
 
 const enc = new TextEncoder();
 
-async function derive(password: string, salt: string): Promise<string> {
+export async function derive(password: string, salt: string): Promise<string> {
   const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: enc.encode(salt), iterations: ITERATIONS }, key, 256);
   return [...new Uint8Array(bits)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /** Compares two equal-length hex strings without stopping at the first difference. */
-function sameHex(a: string, b: string): boolean {
+export function sameHex(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
   for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -72,3 +72,8 @@ export async function checkPassword(id: string, password: string): Promise<Sessi
 }
 
 export const ROLES: Role[] = ["purchasing", "store", "viewer"];
+
+/** The accounts with their hashes, for seeding the database. */
+export function accountsForSeeding() {
+  return ACCOUNTS.map((a) => ({ id: a.id, name: a.name, role: a.role, store: a.store ?? null, initials: a.initials, salt: a.salt, hash: a.hash }));
+}

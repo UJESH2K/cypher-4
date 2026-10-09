@@ -2,7 +2,14 @@
 // `location` on a purchase order is optional: when missing, the order is
 // assumed to be delivered to the main warehouse.
 
-export type Product = { sku: string; name: string; machine_model: string; category: string };
+export type Product = {
+  sku: string;
+  name: string;
+  machine_model: string;
+  category: string;
+  // Optional, from the database: how the part's demand behaves (lib/data/carparts.ts).
+  demand_class?: "smooth" | "erratic" | "intermittent" | "lumpy" | "none";
+};
 export type InventoryRow = { sku: string; location: string; stock: number };
 export type SaleRow = { date: string; sku: string; location: string; qty_sold: number };
 export type SupplierRow = { supplier: string; sku: string; price: number; lead_time_days: number; moq: number };
@@ -19,6 +26,9 @@ export type PurchaseOrder = {
 // Created only by actions a person approved inside this app.
 export type Transfer = { id: string; sku: string; from: string; to: string; qty: number; eta: string };
 
+// Average daily sales over the last 180 days, from the full history in the database.
+export type LongRate = { sku: string; location: string; rate180: number };
+
 export type Dataset = {
   products: Product[];
   inventory: InventoryRow[];
@@ -26,6 +36,9 @@ export type Dataset = {
   suppliers: SupplierRow[];
   purchase_orders: PurchaseOrder[];
   transfers: Transfer[];
+  // Optional. The agent only reads the last five weeks of sales; this adds the six-month view
+  // for parts that sell in bursts months apart.
+  longRates?: LongRate[];
 };
 
 // Business assumptions the agent needs but the five files do not contain.
@@ -178,6 +191,9 @@ export type LogEntry = {
   reason?: string;
   by?: string; // name of the person who decided
 };
+
+// A problem someone approved today, kept so the screen can show what was decided.
+export type Handled = { issue: Issue; option: Option; at: string; by?: string };
 
 // A store manager asking the Head of Purchasing to approve an option they may not approve themselves.
 export type ApprovalRequest = { issueId: string; optionId: string; by: string; byName: string; at: string };

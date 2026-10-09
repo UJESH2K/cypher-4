@@ -54,6 +54,11 @@ export type Index = {
   positions: Map<string, Position>;
   networkRate: Map<string, number>;
   historyDays: number;
+  // Six-month daily rate per sku|location and per sku across stores (only when the data carries it).
+  longRate: Map<string, number>;
+  networkLongRate: Map<string, number>;
+  // Parts whose demand comes in bursts (intermittent or lumpy).
+  bursty: Set<string>;
 };
 
 const key = (sku: string, loc: string) => `${sku}|${loc}`;
@@ -167,10 +172,22 @@ export function buildIndex(data: Dataset, settings: Settings, asOf: string): Ind
     if (!isWarehouse(location)) networkRate.set(sku, (networkRate.get(sku) ?? 0) + rate);
   }
 
+  const longRate = new Map<string, number>();
+  const networkLongRate = new Map<string, number>();
+  for (const r of data.longRates ?? []) {
+    const v = Number(r.rate180) || 0;
+    longRate.set(key(r.sku, r.location), v);
+    if (!isWarehouse(r.location)) networkLongRate.set(r.sku, (networkLongRate.get(r.sku) ?? 0) + v);
+  }
+  const bursty = new Set(data.products.filter((p) => p.demand_class === "intermittent" || p.demand_class === "lumpy").map((p) => p.sku));
+
   return {
     asOf,
     data,
     settings,
+    longRate,
+    networkLongRate,
+    bursty,
     locations: [...locSet],
     skus: [...skuSet],
     suppliers,
@@ -710,7 +727,12 @@ export function analyse(
     const c = mkCtx(pos);
     if (!c.cheapest) continue;
     const wh = isWarehouse(pos.location);
-    const rate = wh ? ix.networkRate.get(pos.sku) ?? 0 : pos.rate;
+    const shortRate = wh ? ix.networkRate.get(pos.sku) ?? 0 : pos.rate;
+    // A part that sells in bursts months apart can go four weeks without a sale and still be
+    // perfectly healthy, so for those parts the desk judges on six months of sales instead.
+    const longRate = ix.bursty.has(pos.sku) ? (wh ? ix.networkLongRate.get(pos.sku) ?? 0 : ix.longRate.get(key(pos.sku, pos.location)) ?? 0) : 0;
+    const rate = Math.max(shortRate, longRate);
+    const judgedLong = longRate > shortRate;
     const cover = rate > 0 ? pos.stock / rate : Infinity;
     if (cover <= settings.slowDays) continue;
     const excess = Math.floor(pos.stock - rate * KEEP_DAYS);
@@ -783,8 +805,9 @@ export function analyse(
         cash: excess * unit,
         unit,
         sold28: pos.series.reduce((a, b) => a + b, 0),
+        sold180: round(longRate * 180),
       },
-      causes: [],
+      causes: judgedLong ? [{ code: "bursty_view", v: { sold: round(longRate * 180) } }] : [],
       options,
       impact: round(hold.holdingCost),
       urgencyDays: 30,

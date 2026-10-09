@@ -8,6 +8,7 @@ import { readTable, type TableName, TABLES, toCsv } from "@/lib/csv";
 import { buildIndex } from "@/lib/engine";
 import { type Key, type Lang, num, place, t } from "@/lib/i18n";
 import type { Dataset, Settings } from "@/lib/types";
+import SourcesPanel from "./SourcesPanel";
 import { emptyLocation, ordersOverdue, priceHike, rush, setRecentRate } from "@/lib/whatif";
 
 type Props = {
@@ -19,11 +20,13 @@ type Props = {
   onData: (d: Dataset) => void;
   onSettings: (s: Settings) => void;
   onReset: () => void;
+  /** True when the books come from the database; adds the "Data and sources" tab. */
+  server?: boolean;
 };
 
-type Tab = "inventory" | "sales" | "suppliers" | "pos" | "products" | "assumptions";
+type Tab = "inventory" | "sales" | "suppliers" | "pos" | "products" | "assumptions" | "sources";
 const TABS: Tab[] = ["inventory", "sales", "suppliers", "pos", "products", "assumptions"];
-const FILE: Record<Exclude<Tab, "assumptions">, TableName> = { inventory: "inventory", sales: "sales", suppliers: "suppliers", pos: "purchase_orders", products: "products" };
+const FILE: Record<Exclude<Tab, "assumptions" | "sources">, TableName> = { inventory: "inventory", sales: "sales", suppliers: "suppliers", pos: "purchase_orders", products: "products" };
 const LIMIT = 150;
 
 const ASSUME: [keyof Settings, Key, number][] = [
@@ -66,7 +69,7 @@ function NumCell({ value, label, step = 1, disabled, onCommit }: { value: number
   );
 }
 
-export default function RecordsView({ lang, user, data, settings, asOf, onData, onSettings, onReset }: Props) {
+export default function RecordsView({ lang, user, data, settings, asOf, onData, onSettings, onReset, server }: Props) {
   const T = (k: Key, v?: Record<string, string | number>) => t(lang, k, v);
   const edit = canEditRecords(user);
   const [tab, setTab] = useState<Tab>("inventory");
@@ -88,7 +91,7 @@ export default function RecordsView({ lang, user, data, settings, asOf, onData, 
   }, [data, settings, asOf]);
 
   const upload = async (f: File | undefined) => {
-    if (!f || tab === "assumptions" || !edit) return;
+    if (!f || tab === "assumptions" || tab === "sources" || !edit) return;
     setError("");
     const name = FILE[tab];
     try {
@@ -105,7 +108,7 @@ export default function RecordsView({ lang, user, data, settings, asOf, onData, 
   };
 
   const download = () => {
-    if (tab === "assumptions") return;
+    if (tab === "assumptions" || tab === "sources") return;
     const name = FILE[tab];
     const blob = new Blob([toCsv(data[name] as unknown as Record<string, unknown>[], [...TABLES[name].columns])], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -265,7 +268,7 @@ export default function RecordsView({ lang, user, data, settings, asOf, onData, 
     shown = Math.min(total, LIMIT);
     body = (
       <table className="table">
-        {head([["col.sku"], ["col.name"], ["col.machine"], ["col.category"]])}
+        {head([["col.sku"], ["col.name"], ["col.machine"], ["col.category"], ["col.pattern"]])}
         <tbody>
           {rows.slice(0, LIMIT).map((r) => (
             <tr key={r.sku}>
@@ -275,6 +278,7 @@ export default function RecordsView({ lang, user, data, settings, asOf, onData, 
               <td data-label={T("col.name")}>{r.name}</td>
               <td data-label={T("col.machine")}>{r.machine_model}</td>
               <td data-label={T("col.category")}>{r.category}</td>
+              <td data-label={T("col.pattern")}>{r.demand_class ? <span className={`chip dcc-${r.demand_class}`}>{T(`dc.${r.demand_class}` as Key)}</span> : "–"}</td>
             </tr>
           ))}
         </tbody>
@@ -344,7 +348,7 @@ export default function RecordsView({ lang, user, data, settings, asOf, onData, 
 
       <section className="card">
         <div className="tabs" role="tablist" aria-label={T("data.title")}>
-          {TABS.map((x) => (
+          {(server ? [...TABS, "sources" as Tab] : TABS).map((x) => (
             <button
               key={x}
               role="tab"
@@ -364,7 +368,9 @@ export default function RecordsView({ lang, user, data, settings, asOf, onData, 
         </div>
 
         <div id="records-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
-          {tab === "assumptions" ? (
+          {tab === "sources" ? (
+            <SourcesPanel lang={lang} />
+          ) : tab === "assumptions" ? (
             <>
               <p className="note-line" style={{ paddingTop: 16 }}>
                 {T("assume.note")}

@@ -885,6 +885,24 @@ svg {
   font-weight: 550;
 }
 
+.side-sync {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.side-sync svg {
+  margin-top: 2px;
+  color: var(--brass);
+}
+
+.side-sync small {
+  display: block;
+  opacity: 0.8;
+}
+
 .side-status button {
   display: inline-flex;
   align-items: center;
@@ -3137,6 +3155,100 @@ td:not(.num) .cell-input {
   padding: 0 16px 12px;
   font-size: 13.5px;
   color: var(--muted);
+}
+
+/* Data and sources */
+
+.sources {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.src-card {
+  padding: 16px 18px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.src-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 650;
+}
+
+.src-card h3 svg {
+  color: var(--brass);
+}
+
+.src-card p {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.src-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.src-counts > div {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  display: grid;
+  gap: 2px;
+}
+
+.src-counts b {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 24px;
+  line-height: 1.05;
+}
+
+.src-counts span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.classbar {
+  display: flex;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-3);
+}
+
+.dc-smooth { background: var(--green); }
+.dc-erratic { background: var(--teal); }
+.dc-intermittent { background: var(--brass); }
+.dc-lumpy { background: var(--violet); }
+.dcc-smooth { background: var(--green-soft); color: var(--green-ink); border-color: transparent; }
+.dcc-erratic { background: var(--teal-soft); color: var(--teal-ink); border-color: transparent; }
+.dcc-intermittent { background: var(--brass-soft); color: var(--brass-ink); border-color: transparent; }
+.dcc-lumpy { background: var(--violet-soft); color: var(--violet-ink); border-color: transparent; }
+
+@media (max-width: 720px) {
+  .grid-2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sources {
+    padding: 12px;
+  }
 }
 
 /* ---------- Decisions ---------- */

@@ -1,12 +1,12 @@
 "use client";
 
-import { Check, ChevronsUpDown, Database, History, Inbox, Languages, LayoutDashboard, LogOut, Moon, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Sparkles, Sun } from "lucide-react";
+import { Check, ChevronsUpDown, Database, HardDrive, History, Inbox, Languages, LayoutDashboard, LogOut, Moon, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Sparkles, Sun } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Avatar, BrandMark, roleCan, roleLabel } from "@/components/ui";
 import type { SessionUser } from "@/lib/auth/roles";
 import { type Key, type Lang, LANGS, localeOf, t } from "@/lib/i18n";
-import type { Theme, View } from "./types";
+import type { AgentRunInfo, Mode, Theme, View } from "./types";
 
 type Props = {
   lang: Lang;
@@ -16,6 +16,8 @@ type Props = {
   mini: boolean;
   theme: Theme;
   checkedAt: Date | null;
+  mode: Mode;
+  lastRun: AgentRunInfo | null;
   onNavigate: (v: View) => void;
   onAsk: () => void;
   onSearch: () => void;
@@ -136,6 +138,15 @@ export default function Sidebar(p: Props) {
           {T("map.count", { n: counts.problems })}
         </div>
         <div>{time && T("nav.status", { time })}</div>
+        {p.mode !== "loading" && (
+          <div className="side-sync">
+            {p.mode === "server" ? <Database size={13} aria-hidden="true" /> : <HardDrive size={13} aria-hidden="true" />}
+            <span>
+              {T(p.mode === "server" ? "sync.server" : "sync.local")}
+              {p.mode === "server" && p.lastRun ? <small>{T("nav.run", { ms: p.lastRun.ms })}</small> : null}
+            </span>
+          </div>
+        )}
         <button onClick={p.onRecheck}>
           <RefreshCw size={13} aria-hidden="true" />
           {T("brief.recheck")}
