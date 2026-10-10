@@ -206,6 +206,22 @@ export default function LoginScreen({ initialLang, demo }: Props) {
       </section>
 
       <main className="auth-panel">
+        {/* Languages sit in the top-right corner, so the first thing anyone sees is that the desk speaks five. */}
+        <motion.div
+          className="auth-langs"
+          role="group"
+          aria-label={T("lang.label")}
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+        >
+          <Globe size={16} aria-hidden="true" />
+          {LANGS.map((l) => (
+            <button key={l.code} type="button" aria-pressed={lang === l.code} onClick={() => changeLang(l.code)} lang={l.code} title={l.english}>
+              {l.name}
+            </button>
+          ))}
+        </motion.div>
         <motion.div
           ref={card}
           className="auth-form-wrap"
@@ -340,14 +356,6 @@ export default function LoginScreen({ initialLang, demo }: Props) {
             ))}
           </div>
 
-          <div className="auth-langs" role="group" aria-label={T("lang.label")}>
-            <Globe size={16} aria-hidden="true" />
-            {LANGS.map((l) => (
-              <button key={l.code} type="button" aria-pressed={lang === l.code} onClick={() => changeLang(l.code)} lang={l.code}>
-                {l.name}
-              </button>
-            ))}
-          </div>
           <p className="auth-session">
             <ShieldCheck size={15} aria-hidden="true" />
             {T("login.session")}

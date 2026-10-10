@@ -3704,6 +3704,7 @@ td:not(.num) .cell-input {
 /* ---------- Sign-in ---------- */
 
 .auth {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1.12fr) minmax(420px, 0.88fr);
   min-height: 100dvh;
@@ -3897,10 +3898,11 @@ td:not(.num) .cell-input {
 }
 
 .auth-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 28px clamp(24px, 5vw, 64px);
+  padding: 84px clamp(24px, 5vw, 64px) 28px;
 }
 
 .auth-form-wrap {
@@ -4023,11 +4025,15 @@ td:not(.num) .cell-input {
 }
 
 .auth-langs {
+  position: absolute;
+  top: 22px;
+  right: clamp(20px, 3vw, 40px);
+  left: clamp(20px, 3vw, 40px);
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 6px;
-  margin-top: 20px;
   font-size: 13px;
   color: var(--muted);
 }
@@ -4193,7 +4199,34 @@ td:not(.num) .cell-input {
     margin-top: 12px;
   }
   .auth-panel {
+    position: static;
     padding: 32px 20px 40px;
+  }
+  /* On phones the languages sit at the very top of the page, over the dark hero. */
+  .auth-hero {
+    padding-top: 74px;
+  }
+  .auth-langs {
+    top: 16px;
+    left: 16px;
+    right: 16px;
+    z-index: 2;
+    gap: 5px;
+  }
+  .auth-langs > svg {
+    display: none;
+  }
+  .auth-langs button {
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 13px;
+    color: #dfe8e3;
+    border-color: rgb(255 255 255 / 0.2);
+  }
+  .auth-langs button[aria-pressed="true"] {
+    background: #e3b860;
+    border-color: #e3b860;
+    color: #13241f;
   }
 }
 
